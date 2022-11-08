@@ -1,0 +1,30 @@
+FROM ruby:3.1.2
+ENV RAILS_ENV production
+
+RUN apt update -qq && apt upgrade -y
+RUN apt-get install -y build-essential
+RUN apt install -y postgresql-client
+RUN curl -sL https://deb.nodesource.com/setup_18.x | bash -
+RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+RUN echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+RUN apt update -qq
+RUN apt install -y nodejs yarn
+RUN gem update --system
+RUN gem install bundle
+
+WORKDIR /app
+RUN echo 'gem: --no-rdoc --no-ri >> "$HOME/.gemrc"'
+
+COPY Gemfile Gemfile.lock ./
+COPY package.json yarn.lock ./
+
+RUN bundle config set --local without 'development test'
+RUN bundle install -j $(nproc)
+RUN yarn install
+
+COPY . /app
+
+RUN RAILS_GROUPS=assets bin/rails assets:precompile
+ENTRYPOINT [ "/app/bin/entrypoint.sh" ]
+CMD ["bin/rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+EXPOSE 3000

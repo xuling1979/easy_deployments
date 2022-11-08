@@ -1,0 +1,56 @@
+version: '3.8'
+
+networks:
+  traefik-public:
+    external: true
+  <%= app_name.underscore %>_network:
+
+volumes:
+  postgres:
+  storage:
+
+services:
+  app:
+    image: <%= registry %>/<%= app_name.underscore %>_app:latest
+    restart: always
+    command: bin/rails server -p 3000 -b 0.0.0.0
+    environment:
+      RAILS_SERVE_STATIC_FILES: "enabled"
+      RAILS_LOG_TO_STDOUT: "enabled"
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432
+    volumes:
+      - storage:/app/storage
+    ports:
+      - 3000
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - traefik-public
+      - <%= app_name.underscore %>_network
+    deploy:
+      replicas: 2
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.<%= app_name.underscore %>.loadbalancer.server.port=3000
+        - traefik.http.routers.<%= app_name.underscore %>.rule=Host(`<%= app_name.underscore %>.<%= domain %>`)
+        - traefik.http.routers.<%= app_name.underscore %>.entrypoints=web
+        - traefik.constraint-label=traefik-public
+        - traefik.docker.network=traefik-public
+
+  redis:
+    image: redis:latest
+    restart: always
+    networks:
+      - <%= app_name.underscore %>_network
+
+  postgres:
+    image: postgres:14-alpine
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - 5432
+    networks:
+      - <%= app_name.underscore %>_network
